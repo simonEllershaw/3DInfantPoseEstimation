@@ -1,0 +1,30 @@
+global 6 - pelvis
+leftThigh 3 - l hip
+rightThigh 2 - r hip
+spine
+leftCalf 4 - l knee
+rightCalf 1 - r knee
+spine1 7 - thorax
+leftFoot 5 - l ankle
+rightFoot 0 - r ankle
+spine2
+leftToes
+rightToes
+neck 8 - upper neck
+leftShoulder 13 - l shoulder
+rightShoulder 12 - r shoulder
+head 9 - head top
+leftUpperArm 14 - l elbow
+rightUpperArm 10 - r elbow
+leftForeArm 
+rightForeArm
+leftHand  15 - l wrist
+rightHand 11 - r wrist
+leftFingers
+rightFingers
+noseVertex
+
+
+
+
+"(, , , , , , , , , , , , , , , )"
