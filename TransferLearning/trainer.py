@@ -19,6 +19,7 @@ def train_model(
     optimizer,
     directory,
     num_epochs=25,
+    lrScheduler=None,
 ):
     dataset_sizes = {x: len(dataloaders[x]) for x in ["train", "val"]}
     print(dataset_sizes)
@@ -47,14 +48,14 @@ def train_model(
                 # print(f"Load time {t1 - t2}")
                 images = images.to(device)
                 targets = targets.to(device)
-                visJoints = meta["visJoints"].to(device)
+                # visJoints = meta["visJoints"].to(device)
 
                 # zero the parameter gradients
 
                 # track history if only in train
                 with torch.set_grad_enabled(phase == "train"):
                     outputs = model(images)
-                    loss = criterion(outputs, targets, visJoints)
+                    loss = criterion(outputs, targets)#, visJoints)
                     # backward + optimize only if in training phase
                     if phase == "train":
                         optimizer.zero_grad()
@@ -79,7 +80,8 @@ def train_model(
 
         epochEnd = time.time()
         epochTime = epochEnd - epochStart
-
+        if lrScheduler:
+            lrScheduler.step()
         # Write stats to file at end of each epoch
         with open(os.path.join(directory, "metrics.txt"), "a+") as outfile:
             outfile.write(f"{epoch} {trainLoss} {valLoss} {best_loss} {epochTime} \n")
