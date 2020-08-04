@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 import sys
 import torch
 import pickle
+import numpy as np
+from PIL import Image
 
 BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_PATH)
@@ -12,7 +14,7 @@ sys.path.append(BASE_PATH)
 from DataSets.TargetType import TargetType
 from DataSets.Joints3DDataset import Joints3DDataset
 import DataSets.config as cfg
-
+import DataSets.visualization as vis
 
 class MPI_INF_3DHPDataset(Joints3DDataset):
     """MPI-INF-3DHP dataset."""
@@ -22,9 +24,9 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
             Joints3DDataset.__init__(
                 self,
                 mode,
-                cfg.MPI_INF["numJoints"],
-                cfg.MPI_INF["pelvicIndex"],
-                cfg.MPI_INF["connectedJoints"],
+                cfg.Hesse["numJoints"],
+                cfg.Hesse["pelvicIndex"],
+                cfg.Hesse["connectedJoints"],
             )
         self.basePath = cfg.MPI_INF["basePath"]
         self.subjects = cfg.MPI_INF["modeSubjects"][mode]
@@ -32,6 +34,9 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
         self.cameras = cfg.MPI_INF["cameras"]
         self.numFrames = cfg.MPI_INF["numFrames"]
         self.annotionsFname = cfg.MPI_INF["annotionsFname"]
+        self.hesseMappings = cfg.MPI_INF["hesseMappings"]
+        self.jointsNotInHesse = cfg.MPI_INF["jointsNotInHesse"]
+
         if generateAnnotationsJSON:
             self.generateAnnotationsJSON()
         self.db = self._get_db()
@@ -65,19 +70,28 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
                             seqDirectory, camera, frameNumber
                         )
 
-                        joint2D = target = annoMatFile["annot2"][camera][0][
+                        joint2D = annoMatFile["annot2"][camera][0][
                             frameNumber
                         ].reshape(-1, 2)
+                        joint2D = self.arrayToHesseFormat(joint2D)
 
                         joint3D = (
                             annoMatFile["annot3"][camera][0][frameNumber]
                             .reshape(-1, 3)
                             .astype("float32")
                         )
+                        joint3D = self.arrayToHesseFormat(joint3D)
+
                         db.append(
                             Joints3DDataset.generateSample(joint2D, joint3D, imagePath)
                         )
         return db
+
+    def arrayToHesseFormat(self, jointArray):
+        copyOfArray = jointArray.copy()
+        for i in range(len(self.hesseMappings)):
+            jointArray[i] = copyOfArray[self.hesseMappings[i]]
+        return jointArray[:self.numJoints]
 
     # def generateAnnotationsJSON(self):
     #     db = {}
@@ -111,8 +125,8 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
     #     dbfile = open(self.annotionsFname, "wb")
     #     pickle.dump(db, dbfile)
     #     dbfile.close()
-        
-    def getMPIInfDataLoader(batchSize, targetType):
+
+    def getDataLoader(batchSize, targetType):
         MPI_INFData = {x: MPI_INF_3DHPDataset(x, targetType) for x in ["train", "val"]}
 
         num_workers = 12
@@ -136,16 +150,17 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
 
 
 if __name__ == "__main__":
-    data = MPI_INF_3DHPDataset("val", TargetType.joint3D)#, True)
+    data = MPI_INF_3DHPDataset("val", TargetType.joint3D)  # , True)
     # print(data[0][0])
     # print(data[0][1])
     # print(len(data))
     # data.loadImages()
 
-    sample = data[0]
+    inputData, outputData, meta = data[0]
     plt.figure()
-    ax = plt.subplot(1, 1, 1, projection="3d")
-    data.visualiseSample(sample, ax)
+    ax1 = plt.subplot(1, 2, 1)
+    ax2 = plt.subplot(1, 2, 2, projection="3d")
+    vis.plot3DJoints(ax1, ax2, outputData, meta["imagePath"], data.connectedJoints)
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
