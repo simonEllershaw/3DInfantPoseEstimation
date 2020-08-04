@@ -27,12 +27,11 @@ from FasterRCNN.bboxModel import BoundingBoxModel
 from DataSets.TargetType import TargetType
 from TransferLearning.liftingModel import LinearModel, weight_init
 import DataSets.config as cfg
-MPIIModelFname = (
-    "/homes/sje116/Diss/TransferLearning/savedModels/02_08_13_55/model.tar"
-)
 
-MPI_INF_2DPoseModelFname = (
-    "/homes/sje116/Diss/TransferLearning/savedModels/MPI_INF_2DPose/model.tar"
+MPIIModelFname = "/homes/sje116/Diss/TransferLearning/savedModels/03_08_19_30/model.tar"
+
+MPI_INF_3DLiftingModelFname = (
+    "/homes/sje116/Diss/TransferLearning/savedModels/04_08_17_55/model.tar"
 )
 
 Hesse2DPoseModelFname = (
@@ -56,18 +55,6 @@ class Upsampling(nn.Module):
         return x
 
 
-class Flatten(nn.Module):
-    def __init__(self, numJoints):
-        super(Flatten, self).__init__()
-        self.conv1 = nn.Conv2d(512, 128, 5, 2)
-        self.fc = nn.Linear(128 * 2 * 2, numJoints)
-
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = x.view(x.size(0), -1)
-        return self.fc(x)
-
-
 def loadMPIIModel(numJoints, device):
     resNet = models.resnet50(pretrained=True)
     modules = list(resNet.children())[:-2]
@@ -75,102 +62,63 @@ def loadMPIIModel(numJoints, device):
     resNet = nn.Sequential(resNet, Upsampling(numJoints))
     return resNet.to(device)
 
-
-def loadHesse2DPoseModel(numJoints, device, loadChildCheckpoint=True):
-    model = loadMPIIModel(cfg.MPII["numJoints"], device)
-    if loadChildCheckpoint:
-        checkpoint = torch.load(MPIIModelFname)
-        model.load_state_dict(checkpoint["model_state_dict"])
-
-    stub = list(model.children())[-1]
-    stub.convTrans4 = nn.ConvTranspose2d(256, numJoints, 1, 1).to(device)
-    return model
-
-
-# def loadMPI_INFDepthModel(numJoints, device, loadChildCheckpoint=True):
-#     model = loadMPI_INF2DPoseModel(28, device, loadChildCheckpoint=False)
-#     if loadChildCheckpoint:
-#         checkpoint = torch.load(MPI_INF_2DPoseModelFname)
-#         model.load_state_dict(checkpoint["model_state_dict"])
-
-#     newStub = Flatten(numJoints).to(device)
-#     resnetBackbone = list(model.children())[:-1]
-#     resnetBackbone = nn.Sequential(*resnetBackbone)
-#     model = nn.Sequential(resnetBackbone, newStub)
-#     return model
-
-
-def loadHesseDepthModel(numJoints, device, loadChildCheckpoint=True):
-    model = loadHesse2DPoseModel(numJoints, device, loadChildCheckpoint=False)
-    if loadChildCheckpoint:
-        checkpoint = torch.load(Hesse2DPoseModelFname)
-        model.load_state_dict(checkpoint["model_state_dict"])
-
-    newStub = Flatten(numJoints).to(device)
-    resnetBackbone = list(model.children())[:-1]
-    resnetBackbone = nn.Sequential(*resnetBackbone)
-    model = nn.Sequential(resnetBackbone, newStub)
-
-    return model
-
-
 def getMPIITrainingObjects(batchSize, device):
     print("MPII")
     dataLoaders, numJoints = MPIIDataset.getDataLoader(batchSize)
-
     model = loadMPIIModel(numJoints, device)
     # Set up model training paramters
     criterion = loss.JointsMSELoss()
 
     return dataLoaders, model, criterion
 
-
-# def getMPI_INF_3DHP_2DPoseTrainingObjects(imageSize, batchSize, device):
-#     dataLoaders, numJoints = MPI_INF_3DHPDataset.getDataLoader(
-#         batchSize, TargetType.joint2D
-#     )
-
-#     model = loadMPI_INF2DPoseModel(numJoints, device)
-
-#     criterion = loss.JointsMSELoss()
-
-#     return dataLoaders, model, criterion
-
+def loadHesse2DPoseModel(numJoints, device, loadChildCheckpoint=True):
+    model = loadMPIIModel(cfg.MPII["numJoints"], device)
+    if loadChildCheckpoint:
+        checkpoint = torch.load(MPIIModelFname)
+        model.load_state_dict(checkpoint["model_state_dict"])
+    stub = list(model.children())[-1]
+    stub.convTrans4 = nn.ConvTranspose2d(256, numJoints, 1, 1).to(device)
+    return model
 
 def getHesse2DPoseTrainingObjects(batchSize, device):
     dataLoaders, numJoints = HesseSyntheticDataset.getDataLoader(
         batchSize, TargetType.joint2D
     )
-
+    numJoints = cfg.Hesse["numJoints"]
     model = loadHesse2DPoseModel(numJoints, device)
 
     criterion = loss.JointsMSELoss()
 
     return dataLoaders, model, criterion
 
-
-# def getMPI_INF_3DHPDepthModelTrainingObjects(imageSize, batchSize, device):
-#     dataLoaders, numJoints = MPI_INF_3DHPDataset.getDataLoader(
-#         batchSize, TargetType.joint3D
-#     )
-
-#     model = loadMPI_INFDepthModel(numJoints, device)
-
-#     criterion = loss.DepthMSELoss()
-
-#     return dataLoaders, model, criterion
-
-
-def getDepthModelTrainingObjects(batchSize, device):
-    dataLoaders, numJoints = MPI_INF_3DHPDataset.getMPIInfDataLoader(
-        batchSize, TargetType.joint3D
-    )
-
+def getLiftingModel(numJoints, device):
     model = LinearModel(numJoints).to(device)
     model.apply(weight_init)
+    return model
 
-    criterion = nn.MSELoss() #loss.DepthMSELoss()
 
+def getMPI_INFLiftingTrainingObjects(batchSize, device):
+    dataLoaders, numJoints = MPI_INF_3DHPDataset.getDataLoader(
+        batchSize, TargetType.joint3D
+    )
+    model = getLiftingModel(cfg.Hesse["numJoints"], device)
+    criterion = nn.MSELoss()  # loss.DepthMSELoss()
+
+    return dataLoaders, model, criterion
+
+def loadHesseLiftingModel(device, loadChildCheckpoint=True):
+    model = getLiftingModel(cfg.Hesse["numJoints"], device)
+    if loadChildCheckpoint:
+        checkpoint = torch.load(MPI_INF_3DLiftingModelFname)
+        model.load_state_dict(checkpoint["model_state_dict"])
+    return model
+
+def getHesseLiftingTrainingObjects(batchSize, device):
+    dataLoaders, numJoints = HesseSyntheticDataset.getDataLoader(
+        batchSize, TargetType.joint3D
+    )
+    model = loadHesseLiftingModel(device)
+    criterion = nn.MSELoss()  # loss.DepthMSELoss()
     return dataLoaders, model, criterion
 
 
@@ -178,21 +126,20 @@ if __name__ == "__main__":
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
-    batchSize = 32
+    batchSize = 64
 
-    dataLoaders, model, criterion = getMPIITrainingObjects(
-        batchSize, device
-    )
+    dataLoaders, model, criterion = getMPI_INFLiftingTrainingObjects(batchSize, device)
     # print(torchsummary.summary(model, (3, imageSize, imageSize)))
 
     paramsToUpdate = model.parameters()
-    optimizer = Adam(paramsToUpdate, lr=1e-4)
+    optimizer = Adam(paramsToUpdate, lr=1e-3)
+    lrScheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=0.96)
 
-    checkpoint = torch.load(
-        "/homes/sje116/Diss/TransferLearning/savedModels/03_08_15_56/model.tar"
-    )
-    model.load_state_dict(checkpoint["model_state_dict"])
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    # checkpoint = torch.load(
+    #     "/homes/sje116/Diss/TransferLearning/savedModels/02_08_13_55/model.tar"
+    # )
+    # model.load_state_dict(checkpoint["model_state_dict"])
+    # optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
     # Setup Directory
     dateAndTime = datetime.now().strftime("%d_%m_%H_%M")
@@ -203,5 +150,5 @@ if __name__ == "__main__":
 
     # Train
     trainer.train_model(
-        model, dataLoaders, device, criterion, optimizer, directory, 40,
+        model, dataLoaders, device, criterion, optimizer, directory, 40, lrScheduler
     )
