@@ -20,7 +20,9 @@ import DataSets.config as cfg
 import DataSets.visualization as vis
 
 
-class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndToEndDataset):
+class HesseSyntheticDataset(
+    Joints3DDataset, Joints2DDataset, BboxDataset, EndToEndDataset
+):
     """Hesse Synthetic dataset.
         Adpated from https://pytorch.org/tutorials/beginner/data_loading_tutorial.html"""
 
@@ -40,7 +42,7 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
                 cfg.Hesse["numJoints"],
                 cfg.Hesse["pelvicIndex"],
                 cfg.Hesse["connectedJoints"],
-                cfg.Hesse["jointColours"]
+                cfg.Hesse["jointColours"],
             )
         elif self.targetType == TargetType.endToEnd:
             self.base = EndToEndDataset
@@ -50,14 +52,15 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
                 cfg.Hesse["numJoints"],
                 cfg.Hesse["pelvicIndex"],
                 cfg.Hesse["connectedJoints"],
-                cfg.Hesse["jointColours"]
+                cfg.Hesse["jointColours"],
             )
 
         self.basePath = cfg.Hesse["basePath"]
         self.datasets = cfg.Hesse["modeDatasets"][mode]
         self.connectedJoints = cfg.Hesse["connectedJoints"]
         self.cameraIntrinsics = cfg.Hesse["cameraIntrinsics"]
-        self.numFramesPerSequence = 5#cfg.Hesse["numFramesPerSequence"]
+        self.numFramesPerSequence = cfg.Hesse["numFramesPerSequence"]
+        self.videoPCKhThresholds = cfg.Hesse["videoPCKhThresholds"]
 
         self.boundingBoxPickleFile = os.path.join(self.basePath, "bboxData")
         self.db = self._get_db()
@@ -70,7 +73,10 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
     def _get_db(self):
         db = []
 
-        if self.targetType == TargetType.joint2D or self.targetType == TargetType.endToEnd:
+        if (
+            self.targetType == TargetType.joint2D
+            or self.targetType == TargetType.endToEnd
+        ):
             with open(self.boundingBoxPickleFile, "rb") as bboxDataFile:
                 bboxData = pickle.load(bboxDataFile)
 
@@ -88,9 +94,13 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
                         videoPath, videoNumber, frameNumber, bboxData
                     )
                 elif self.targetType == TargetType.joint3D:
-                    sample = self.generate3DJointSample(videoPath, frameNumber)
+                    sample = self.generate3DJointSample(
+                        videoPath, videoNumber, frameNumber
+                    )
                 elif self.targetType == TargetType.endToEnd:
-                    sample = self.generateEndToEndSample(videoPath, videoNumber, frameNumber, bboxData)
+                    sample = self.generateEndToEndSample(
+                        videoPath, videoNumber, frameNumber, bboxData
+                    )
                 db.append(sample)
         return db
 
@@ -128,9 +138,13 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
         scale = frameData["scale"]
         centre = frameData["centre"]
 
-        return Joints2DDataset.generateSample(joints2D, imagePath, scale, centre)
+        PCKhThreshold = self.videoPCKhThresholds[videoNumber]["2D"]
 
-    def generate3DJointSample(self, videoPath, frameNumber):
+        return Joints2DDataset.generateSample(
+            joints2D, imagePath, scale, centre, PCKhThreshold
+        )
+
+    def generate3DJointSample(self, videoPath, videoNumber, frameNumber):
         imagePath = HesseSyntheticDataset.getImageFname(videoPath, frameNumber)
 
         joints2DFname = HesseSyntheticDataset.get2DJointsFname(videoPath, frameNumber)
@@ -141,7 +155,11 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
         joints3D = np.loadtxt(joints3DFname, dtype="float")[:, :3] * 1000
         # joints3D = np.append(joints3D, np.zeros((3, 3)), axis=0)
 
-        return Joints3DDataset.generateSample(joints2D, joints3D, imagePath)
+        PCKhThreshold = self.videoPCKhThresholds[videoNumber]["3D"]
+
+        return Joints3DDataset.generateSample(
+            joints2D, joints3D, imagePath, PCKhThreshold
+        )
 
     def generateEndToEndSample(self, videoPath, videoNumber, frameNumber, bboxData):
         imagePath = HesseSyntheticDataset.getImageFname(videoPath, frameNumber)
@@ -157,7 +175,18 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
         scale = frameData["scale"]
         centre = frameData["centre"]
 
-        return EndToEndDataset.generateSample(joints2D, joints3D, imagePath, scale, centre)
+        PCKh2DThreshold = self.videoPCKhThresholds[videoNumber]["2D"]
+        PCKh3DThreshold = self.videoPCKhThresholds[videoNumber]["3D"]
+
+        return EndToEndDataset.generateSample(
+            joints2D,
+            joints3D,
+            imagePath,
+            scale,
+            centre,
+            PCKh2DThreshold,
+            PCKh3DThreshold,
+        )
 
     def generateBboxSample(self, videoPath, frameNumber):
         imagePath = self.getImageFname(videoPath, frameNumber)
@@ -197,32 +226,40 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
         pickle.dump(db, dbfile)
         dbfile.close()
 
-    def getDataLoader(batchSize, targetType):
-        syntheticData = {
-            x: HesseSyntheticDataset(x, targetType) for x in ["train", "val", "test"]
-        }
+    def getDataLoader(batchSize, targetType, onlyLoadTest=False):
+        dataSets = ["test"] if onlyLoadTest else ["train", "val", "test"]
+
+        syntheticData = {x: HesseSyntheticDataset(x, targetType) for x in dataSets}
 
         collate_fn = BboxDataset.collate if targetType is TargetType.bbox else None
 
         num_workers = 4
         dataloaders = {
-            x: torch.utils.data.DataLoader(
-                syntheticData[x],
+            "test": torch.utils.data.DataLoader(
+                syntheticData["test"],
                 batch_size=batchSize,
                 shuffle=False,
                 num_workers=num_workers,
                 collate_fn=collate_fn,
             )
-            for x in ["val", "test"]
         }
 
-        dataloaders["train"] = torch.utils.data.DataLoader(
-            syntheticData["train"],
-            batch_size=batchSize,
-            shuffle=True,
-            num_workers=num_workers,
-            collate_fn=collate_fn,
-        )
+        if not onlyLoadTest:
+            dataloaders["val"] = torch.utils.data.DataLoader(
+                syntheticData["val"],
+                batch_size=batchSize,
+                shuffle=False,
+                num_workers=num_workers,
+                collate_fn=collate_fn,
+            )
+
+            dataloaders["train"] = torch.utils.data.DataLoader(
+                syntheticData["train"],
+                batch_size=batchSize,
+                shuffle=True,
+                num_workers=num_workers,
+                collate_fn=collate_fn,
+            )
 
         return dataloaders, cfg.Hesse["numJoints"]
 
@@ -232,10 +269,15 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndTo
 
 if __name__ == "__main__":
     syntheticData = HesseSyntheticDataset("val", TargetType.endToEnd)
+    sample = syntheticData[0]
+    print(sample[2]["3DPCKhThreshold"])
+
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
-    syntheticData.visualiseSample(syntheticData[0], (os.path.join(__location__, "../images/Hesse.png")))
+    syntheticData.visualiseSample(
+        syntheticData[0], (os.path.join(__location__, "../images/Hesse.png"))
+    )
 
     # print(joint3D)
 

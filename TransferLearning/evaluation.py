@@ -20,64 +20,11 @@ from PIL import Image
 import DataSets.config as cfg
 import DataSets.visualization as vis
 
-
-def evaluateDepthModel(model, dataloader, numJoints, head, neck, device):
-
-    print("Evaluating model on test set")
-    print("-" * 10)
-    print(len(dataloader))
-    runningJointsError = torch.zeros(numJoints)
-    runningPCKh = torch.zeros(numJoints)
-    i = 0
-    euclideanDist = []
-    for joints2D, gt, meta in dataloader:
-        i += 1
-        # if i == 5:
-        #     break
-        outputs = model(joints2D.to(device)).detach().cpu().view(-1, numJoints, 3)
-        gt = gt.view(-1, numJoints, 3)
-        # Zero joints that aren't visible
-        # expandedVisJoints = meta["visJoints"].unsqueeze(-1).expand_as(gt)
-        # gt = gt * expandedVisJoints
-        # predCoords = predCoords * expandedVisJoints
-
-        batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
-            outputs, gt, head, neck
-        )
-        # test = batchEuclDist > 900
-        # if test.any():
-        #     print(i)
-        #     print(batchEuclDist)
-        #     print(meta["imagePath"])
-        #     print()
-        euclideanDist.append(batchEuclDist.numpy())
-        runningJointsError += batchJointError
-        runningPCKh += batchPCKh
-
-        # if firstIteration:
-        #     fname = batch["imagePath"][0]
-        #     visualiseResult(outputs[0], labels[0], fname, ndim)
-        #     firstIteration = False
-    # plotHistogram(np.array(euclideanDist))
-    jointError = runningJointsError / len(dataloader)
-    PCKh = runningPCKh / len(dataloader)
-
-    print("Joint Errors:")
-    print(jointError)
-    print("Mean Joint Error")
-    print(f"{torch.mean(jointError).item():.5f} mm")
-
-    print("PCKH per joint:")
-    print(PCKh)
-    print("Mean PCKh")
-    print(f"{torch.mean(PCKh).item() * 100:.2f}%")
-
-
-def evaluateModel(pose2DModel, liftingModel, dataloader, config):
+def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
 
     print("Evaluating model on test set")
     print("-" * 10)
-    print(len(dataloader))
+    # print(len(dataloader))
 
     numJoints = config["numJoints"]
     head = config["headIndex"]
@@ -110,7 +57,7 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config):
             predCoords = predCoords * expandedVisJoints
 
             batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
-                predCoords, gt, head, neck
+                predCoords, gt, meta["2DPCKhThreshold"], PCKhFactor
             )
             euclidean2DDist.append(batchEuclDist.numpy())
             running2DJointsError += batchJointError
@@ -124,7 +71,7 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config):
             gt = target.view(-1, numJoints, 3)
 
             batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
-                outputs, gt, head, neck
+                outputs, gt, meta["3DPCKhThreshold"], PCKhFactor
             )
             euclidean3DDist.append(batchEuclDist.numpy())
             running3DJointsError += batchJointError
@@ -168,11 +115,11 @@ def plotHistogram(euclideanDist):
     plt.savefig(os.path.join(__location__, "../images/hist.png"))
 
 
-def calcEvalMetrics(preds, gt, head, neck):
+def calcEvalMetrics(preds, gt, PCKhThresholds, PCKhfactor):
     # Euclidean Distance Between Points
     euclideanDist = calcEuclideanDistance(preds, gt)
     # PCKh
-    batchPCKh = calcPCKh(euclideanDist, gt, head, neck)
+    batchPCKh = calcPCKh(euclideanDist, gt, PCKhThresholds, PCKhfactor)
     # Sum over batch
     batchJointError = torch.mean(euclideanDist, 0)
     return batchJointError, batchPCKh, euclideanDist
@@ -186,12 +133,8 @@ def calcEuclideanDistance(vector1, vector2):
     return euclideanDist
 
 
-def calcPCKh(euclideanDist, labels, head, neck, factor=0.5):
-    # Calc PCKh threshold (head to neck length times a factor)
-    headPositions = labels[:, head, :].unsqueeze(1)
-    neckPositions = labels[:, neck, :].unsqueeze(1)
-    thresholds = calcEuclideanDistance(headPositions, neckPositions) * factor
-
+def calcPCKh(euclideanDist, labels, thresholds, factor):
+    thresholds = thresholds.unsqueeze(1) * factor
     maskedDistances = euclideanDist[thresholds[:, 0] > 0]
     thresholds = thresholds[thresholds[:, 0] > 0]
 
@@ -204,66 +147,6 @@ def calcPCKh(euclideanDist, labels, head, neck, factor=0.5):
     PCKhValues = torch.where(maskedDistances <= thresholds, ones, zeros)
     # PCKhValues = torch.prod(PCKhValues, 1)
     return torch.mean(PCKhValues, 0)
-
-
-# def visualiseResult(model, dataloader, device):
-#     i = 0
-#     for image, _, meta in dataloader:
-#         if i == 309:
-#             break
-#         i += 1
-
-#     outputs = model(image.to(device))
-#     preds = outputs.detach().cpu().numpy()
-#     predCoords = inference.postProcessPredictions(
-#         preds, meta["centre"].numpy(), meta["scale"].numpy(), 64
-#     )[0]
-#     gt = meta["joint2D"][0]
-#     visJoints = meta["visJoints"][0]
-#     print(gt)
-#     print(predCoords)
-#     print(visJoints)
-#     print(gt - predCoords)
-
-#     plt.figure()
-#     plt.title(meta["imagePath"][0])
-#     ax = plt.subplot(1, 1, 1)
-#     for i in range(len(connectedJoints)):
-#         joint1 = connectedJoints[i, 0]
-#         joint2 = connectedJoints[i, 1]
-#         if visJoints[joint1] == 1 and visJoints[joint2] == 1:
-#             x, y = [
-#                 np.array([gt[connectedJoints[i, 0], j], gt[connectedJoints[i, 1], j]])
-#                 for j in range(2)
-#             ]
-#             ax.plot(x, y, lw=2, c="r")  # self.connectedJoints[i, 2])
-#             x, y = [
-#                 np.array(
-#                     [
-#                         predCoords[connectedJoints[i, 0], j],
-#                         predCoords[connectedJoints[i, 1], j],
-#                     ]
-#                 )
-#                 for j in range(2)
-#             ]
-#             ax.plot(x, y, lw=2, c="b")
-
-#     for i in range(len(visJoints)):
-#         if visJoints[i] == 1:
-#             ax.scatter(gt[i, 0], gt[i, 1], c="red")
-#             ax.scatter(predCoords[i, 0], predCoords[i, 1], c="blue")
-#     ax.scatter(predCoords[-1, 0], predCoords[-1, 1], c="black")
-#     ax.scatter(gt[-1, 0], gt[-1, 1], c="green")
-#     # ax.scatter(gt[1, 0], gt[1, 1], c="red")
-#     # ax.scatter(gt[4, 0], gt[4, 1], c="green")
-#     # ax.scatter(gt[5, 0], gt[5, 1], c="blue")
-
-#     image = np.array(Image.open(meta["imagePath"][0]))
-#     ax.imshow(image)
-#     __location__ = os.path.realpath(
-#         os.path.join(os.getcwd(), os.path.dirname(__file__))
-#     )
-#     plt.savefig(os.path.join(__location__, "../images/PredictPose.png"))
 
 
 def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
@@ -335,11 +218,11 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
 
-    # dataLoader, model, _ = model.getHesseLiftingTrainingObjects(batchSize, device)
+    dataLoader, liftingModel, _ = model.getHesseLiftingTrainingObjects(batchSize, device)
 
-    dataLoaders, pose2DModel, liftingModel = model.getEndToEndHesseModel(
-        batchSize, device
-    )
+    # dataLoader, pose2DModel, liftingModel = model.getEndToEndHesseModel(
+    #     batchSize, device
+    # )
 
     hessePose2DFname = (
         "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_19/model.tar"
@@ -348,17 +231,17 @@ if __name__ == "__main__":
         "/homes/sje116/Diss/TransferLearning/savedModels/05_08_11_34/model.tar"
     )
 
-    checkpoint = torch.load(hessePose2DFname)
-    pose2DModel.load_state_dict(checkpoint["model_state_dict"])
-    pose2DModel.eval()
+    # checkpoint = torch.load(hessePose2DFname)
+    # pose2DModel.load_state_dict(checkpoint["model_state_dict"])
+    # pose2DModel.eval()
 
     checkpoint = torch.load(hesseLifitingFname)
     liftingModel.load_state_dict(checkpoint["model_state_dict"])
     liftingModel.eval()
 
-    # evaluateModel(pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse)
+    evaluateModel(None, liftingModel, dataLoader["test"], cfg.Hesse, 1)
 
-    visAnOutput(0, pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse, batchSize)
+    # visAnOutput(0, pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse, batchSize)
 
     # plotValidationError(
     #     "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_58/model.tar"

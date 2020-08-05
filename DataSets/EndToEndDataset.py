@@ -24,13 +24,17 @@ class EndToEndDataset(JointsDataset):
     def _get_db(self):
         pass
 
-    def generateSample(joints2D, joints3D, imagePath, scale, centre):
+    def generateSample(
+        joints2D, joints3D, imagePath, scale, centre, PCKh2DThreshold, PCKh3DThreshold
+    ):
         return {
             "joints2D": joints2D,
             "joints3D": joints3D,
             "imagePath": imagePath,
             "scale": scale,
             "centre": centre,
+            "2DPCKhThreshold": PCKh2DThreshold,
+            "3DPCKhThreshold": PCKh3DThreshold,
         }
 
     @abstractmethod
@@ -51,7 +55,7 @@ class EndToEndDataset(JointsDataset):
             )
 
         visJoints = self.calcVisJoints(anno["joints2D"], orgImageShape)
-        
+
         image, _, _ = self.preProcessImage(image, anno["centre"], anno["scale"])
 
         meta = {
@@ -59,7 +63,9 @@ class EndToEndDataset(JointsDataset):
             "joints2D": anno["joints2D"],
             "centre": anno["centre"],
             "scale": anno["scale"],
-            "visJoints": visJoints
+            "visJoints": visJoints,
+            "3DPCKhThreshold": anno["3DPCKhThreshold"],
+            "2DPCKhThreshold": anno["2DPCKhThreshold"],
         }
 
         target = torch.tensor(anno["joints3D"], dtype=torch.float32)

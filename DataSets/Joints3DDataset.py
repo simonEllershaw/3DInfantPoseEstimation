@@ -24,11 +24,12 @@ class Joints3DDataset(JointsDataset):
     def _get_db(self):
         pass
 
-    def generateSample(joint2D, joint3D, imagePath):
+    def generateSample(joint2D, joint3D, imagePath, PCKhThreshold):
         return {
             "joints2D": joint2D,
             "joints3D": joint3D,
             "imagePath": imagePath,
+            "3DPCKhThreshold": PCKhThreshold
         }
 
     @abstractmethod
@@ -39,6 +40,7 @@ class Joints3DDataset(JointsDataset):
 
         meta = {
             "imagePath": anno["imagePath"],
+            "3DPCKhThreshold": anno["3DPCKhThreshold"]
         }
         source = torch.tensor(anno["joints2D"], dtype=torch.float32)
         target = torch.tensor(anno["joints3D"], dtype=torch.float32)

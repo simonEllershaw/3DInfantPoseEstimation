@@ -25,12 +25,13 @@ class Joints2DDataset(JointsDataset):
     def _get_db(self):
         pass
 
-    def generateSample(joints2D, imagePath, scale, centre):
+    def generateSample(joints2D, imagePath, scale, centre, PCKhThreshold):
         return {
             "joints2D": joints2D,
             "imagePath": imagePath,
             "scale": scale,
             "centre": centre,
+            "2DPCKhThreshold": PCKhThreshold
         }
 
     @abstractmethod
@@ -53,6 +54,7 @@ class Joints2DDataset(JointsDataset):
             "joints2D": anno["joints2D"].copy(),
             "centre": anno["centre"],
             "scale": anno["scale"],
+            "2DPCKhThreshold": anno["2DPCKhThreshold"]
         }
 
         # Preprocessing
