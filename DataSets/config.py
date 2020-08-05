@@ -130,7 +130,7 @@ Hesse = {
             [12, 15],
             [15, 24],
             [9, 13],
-            [13,12],
+            [13, 12],
         ]
     ),
     "jointColours": [
@@ -184,7 +184,34 @@ Hesse = {
         {"2D": 11.23, "3D": 26.1},
         {"2D": 12.17, "3D": 28.6},
         {"2D": 13.93, "3D": 30.1},
-    ]
+    ],
+    "jointNames": [
+        "pelvis",
+        "leftThigh",
+        "rightThigh",
+        "spine",
+        "leftCalf",
+        "rightCalf",
+        "spine1",
+        "leftFoot",
+        "rightFoot",
+        "spine2",
+        "leftToes",
+        "rightToes",
+        "neck",
+        "leftShoulder",
+        "rightShoulder",
+        "head",
+        "leftUpperArm",
+        "rightUpperArm",
+        "leftForeArm",
+        "rightForeArm",
+        "leftHand",
+        "rightHand",
+        "leftFingers",
+        "rightFingers",
+        "noseVertex",
+    ],
 }
 
 MPII = {

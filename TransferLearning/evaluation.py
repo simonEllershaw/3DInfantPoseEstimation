@@ -5,6 +5,7 @@ import numpy as np
 import sys
 import os
 import seaborn as sns
+from prettytable import PrettyTable
 
 BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_PATH)
@@ -19,6 +20,7 @@ import TransferLearning.inference as inference
 from PIL import Image
 import DataSets.config as cfg
 import DataSets.visualization as vis
+
 
 def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
 
@@ -83,24 +85,28 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
     joint3DError = running3DJointsError / len(dataloader)
     PCKh3D = running3DPCKh / len(dataloader)
 
+    table = PrettyTable()
+    table.add_column("Joint", config["jointNames"])
     if pose2DModel:
-        print("2D Joint Errors:")
-        print(joint2DError)
+        table.add_column("2D Joint Error", joint2DError.numpy())
+        table.add_column("2D PCKh", PCKh2D.numpy())
+    if liftingModel:
+        table.add_column("3D Joint Error", joint3DError.numpy())
+        table.add_column("3D PCKh", PCKh3D.numpy())
+
+    print(table)
+    print()
+
+    if pose2DModel:
         print("Mean 2D Joint Error")
         print(f"{torch.mean(joint2DError).item():.2f} pixels")
-        print("2D PCKh per joint:")
-        print(PCKh2D)
         print("Mean 2D PCKh Error")
         print(f"{torch.mean(PCKh2D).item() * 100:.2f} %")
         print()
 
     if liftingModel:
-        print("3D Joint Errors:")
-        print(joint3DError)
         print("Mean 3D Joint Error")
         print(f"{torch.mean(joint3DError).item():.2f} mm")
-        print("3D PCKh per joint:")
-        print(PCKh3D)
         print("Mean 3D PCKh")
         print(f"{torch.mean(PCKh3D).item() * 100:.2f} %")
 
@@ -185,16 +191,12 @@ def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
     if liftingModel:
         ax = plt.subplot(numColumns, 2, 3, projection="3d")
         ax.set_title("Ground Truth 3D")
-        vis.plot3DJoints(
-            ax, target[idx], connectedJoints, jointColours
-        )
+        vis.plot3DJoints(ax, target[idx], connectedJoints, jointColours)
 
         ax = plt.subplot(numColumns, 2, 4, projection="3d")
         ax.set_title("Output 3D")
         outputs = liftingModel(source.to(device)).detach().cpu().view(-1, numJoints, 3)
-        vis.plot3DJoints(
-            ax, outputs[idx], connectedJoints, jointColours
-        )
+        vis.plot3DJoints(ax, outputs[idx], connectedJoints, jointColours)
 
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
@@ -218,11 +220,13 @@ if __name__ == "__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
 
-    dataLoader, liftingModel, _ = model.getHesseLiftingTrainingObjects(batchSize, device)
-
-    # dataLoader, pose2DModel, liftingModel = model.getEndToEndHesseModel(
+    # dataLoader, liftingModel, _ = model.getHesseLiftingTrainingObjects(
     #     batchSize, device
     # )
+
+    dataLoader, pose2DModel, liftingModel = model.getEndToEndHesseModel(
+        batchSize, device
+    )
 
     hessePose2DFname = (
         "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_19/model.tar"
@@ -231,15 +235,15 @@ if __name__ == "__main__":
         "/homes/sje116/Diss/TransferLearning/savedModels/05_08_11_34/model.tar"
     )
 
-    # checkpoint = torch.load(hessePose2DFname)
-    # pose2DModel.load_state_dict(checkpoint["model_state_dict"])
-    # pose2DModel.eval()
+    checkpoint = torch.load(hessePose2DFname)
+    pose2DModel.load_state_dict(checkpoint["model_state_dict"])
+    pose2DModel.eval()
 
     checkpoint = torch.load(hesseLifitingFname)
     liftingModel.load_state_dict(checkpoint["model_state_dict"])
     liftingModel.eval()
 
-    evaluateModel(None, liftingModel, dataLoader["test"], cfg.Hesse, 1)
+    evaluateModel(pose2DModel, liftingModel, dataLoader["test"], cfg.Hesse, 1)
 
     # visAnOutput(0, pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse, batchSize)
 
