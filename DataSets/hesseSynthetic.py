@@ -13,12 +13,14 @@ sys.path.append(BASE_PATH)
 
 from DataSets.Joints2DDataset import Joints2DDataset
 from DataSets.Joints3DDataset import Joints3DDataset
+from DataSets.EndToEndDataset import EndToEndDataset
 from DataSets.BboxDataset import BboxDataset
 from DataSets.TargetType import TargetType
 import DataSets.config as cfg
+import DataSets.visualization as vis
 
 
-class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset):
+class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset, EndToEndDataset):
     """Hesse Synthetic dataset.
         Adpated from https://pytorch.org/tutorials/beginner/data_loading_tutorial.html"""
 
@@ -37,14 +39,25 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset):
                 mode,
                 cfg.Hesse["numJoints"],
                 cfg.Hesse["pelvicIndex"],
-                cfg.MPI_INF["connectedJoints"],
+                cfg.Hesse["connectedJoints"],
+                cfg.Hesse["jointColours"]
+            )
+        elif self.targetType == TargetType.endToEnd:
+            self.base = EndToEndDataset
+            EndToEndDataset.__init__(
+                self,
+                mode,
+                cfg.Hesse["numJoints"],
+                cfg.Hesse["pelvicIndex"],
+                cfg.Hesse["connectedJoints"],
+                cfg.Hesse["jointColours"]
             )
 
         self.basePath = cfg.Hesse["basePath"]
         self.datasets = cfg.Hesse["modeDatasets"][mode]
         self.connectedJoints = cfg.Hesse["connectedJoints"]
         self.cameraIntrinsics = cfg.Hesse["cameraIntrinsics"]
-        self.numFramesPerSequence = cfg.Hesse["numFramesPerSequence"]
+        self.numFramesPerSequence = 5#cfg.Hesse["numFramesPerSequence"]
 
         self.boundingBoxPickleFile = os.path.join(self.basePath, "bboxData")
         self.db = self._get_db()
@@ -57,7 +70,7 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset):
     def _get_db(self):
         db = []
 
-        if self.targetType == TargetType.joint2D:
+        if self.targetType == TargetType.joint2D or self.targetType == TargetType.endToEnd:
             with open(self.boundingBoxPickleFile, "rb") as bboxDataFile:
                 bboxData = pickle.load(bboxDataFile)
 
@@ -71,9 +84,13 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset):
                         videoPath, videoNumber, frameNumber, bboxData
                     )
                 elif self.targetType == TargetType.joint2D:
-                    sample = self.generate2DJointSample(videoPath, videoNumber, frameNumber, bboxData)
+                    sample = self.generate2DJointSample(
+                        videoPath, videoNumber, frameNumber, bboxData
+                    )
                 elif self.targetType == TargetType.joint3D:
-                    sample = self.generateJoint3DSample(videoPath, frameNumber)
+                    sample = self.generate3DJointSample(videoPath, frameNumber)
+                elif self.targetType == TargetType.endToEnd:
+                    sample = self.generateEndToEndSample(videoPath, videoNumber, frameNumber, bboxData)
                 db.append(sample)
         return db
 
@@ -114,15 +131,33 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset):
         return Joints2DDataset.generateSample(joints2D, imagePath, scale, centre)
 
     def generate3DJointSample(self, videoPath, frameNumber):
-        imagePath = self.getImageFname(videoPath, frameNumber)
+        imagePath = HesseSyntheticDataset.getImageFname(videoPath, frameNumber)
 
-        joints2DFname = self.get2DJointsFname(videoPath, frameNumber)
+        joints2DFname = HesseSyntheticDataset.get2DJointsFname(videoPath, frameNumber)
+        joints2D = np.loadtxt(joints2DFname, dtype="float")[:, :2]
+        # joints2D = np.append(joints2D, np.zeros((3, 2)), axis=0)
+
+        joints3DFname = self.get3DJointsFname(videoPath, frameNumber)
+        joints3D = np.loadtxt(joints3DFname, dtype="float")[:, :3] * 1000
+        # joints3D = np.append(joints3D, np.zeros((3, 3)), axis=0)
+
+        return Joints3DDataset.generateSample(joints2D, joints3D, imagePath)
+
+    def generateEndToEndSample(self, videoPath, videoNumber, frameNumber, bboxData):
+        imagePath = HesseSyntheticDataset.getImageFname(videoPath, frameNumber)
+
+        joints2DFname = HesseSyntheticDataset.get2DJointsFname(videoPath, frameNumber)
         joints2D = np.loadtxt(joints2DFname, dtype="float")[:, :2]
 
         joints3DFname = self.get3DJointsFname(videoPath, frameNumber)
-        joints3D = np.loadtxt(joints3DFname, dtype="float")[:, :3]
+        joints3D = np.loadtxt(joints3DFname, dtype="float")[:, :3] * 1000
 
-        return Joints3DDataset.generateSample(joints2D, joints3D, imagePath)
+        # Get frameData from bboxData, videoNumber indexed from 1 not 0
+        frameData = bboxData[videoNumber - 1][frameNumber]
+        scale = frameData["scale"]
+        centre = frameData["centre"]
+
+        return EndToEndDataset.generateSample(joints2D, joints3D, imagePath, scale, centre)
 
     def generateBboxSample(self, videoPath, frameNumber):
         imagePath = self.getImageFname(videoPath, frameNumber)
@@ -196,16 +231,12 @@ class HesseSyntheticDataset(Joints3DDataset, Joints2DDataset, BboxDataset):
 
 
 if __name__ == "__main__":
-    syntheticData = HesseSyntheticDataset("val", TargetType.joint2D)
-    sample = syntheticData[0]
-
-    plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    syntheticData.visualiseSample(sample, ax)
+    syntheticData = HesseSyntheticDataset("val", TargetType.endToEnd)
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
-    plt.savefig(os.path.join(__location__, "../images/Hesse.png"))
+    syntheticData.visualiseSample(syntheticData[0], (os.path.join(__location__, "../images/Hesse.png")))
+
     # print(joint3D)
 
     # joint2D = meta["joints2D"]
@@ -226,4 +257,3 @@ if __name__ == "__main__":
     #     transform3D[i] = np.dot(inverse, transform3D[i])
     # print(transform3D - joint3D)
 
-    

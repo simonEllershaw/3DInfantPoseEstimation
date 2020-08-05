@@ -12,12 +12,12 @@ BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_PATH)
 
 from DataSets.JointsDataset import JointsDataset
-
+import DataSets.visualization as vis
 
 class Joints2DDataset(JointsDataset):
     def __init__(self, mode, numJoints):
         # Preprocessing constants
-        super().__init__(mode, numJoints)
+        JointsDataset.__init__(self, mode, numJoints)
         self.rotation_factor = 45
         self.heatmapSize = 64
         self.sigma = 2
@@ -127,23 +127,11 @@ class Joints2DDataset(JointsDataset):
         visJoints = visJoints[:, 0] * visJoints[:, 1]
         return visJoints
 
-    def visualiseSample(self, sample, ax):
+    def visualiseSample(self, sample, fname):
         image, target, meta = sample
-        plt.tight_layout()
-        ax.set_title(meta["imagePath"])
-
-        # Plot target 2D joint gaussians
-        if torch.is_tensor(target):
-            target = target.cpu().numpy()
-        levels = np.arange(0.4, 1.2, 0.2, dtype="float32")
-        upsampledJoints = target.repeat(4, axis=1).repeat(4, axis=2)
-        # for joint in upsampledJoints:
-        #     ax.contourf(joint, levels)
-        ax.contourf(upsampledJoints[15], levels)
-        ax.contourf(upsampledJoints[12], levels)
-
-
-        # Plot image
-        if torch.is_tensor(image):
-            image = image.permute(1, 2, 0).cpu().numpy()
-        ax.imshow(image)
+        plt.figure()
+        plt.title(meta["imagePath"])
+        vis.plotHeatmap(plt, target)   
+        vis.plotImage(plt, image)
+        plt.savefig(fname)
+        

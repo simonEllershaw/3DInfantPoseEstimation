@@ -15,7 +15,7 @@ from DataSets.JointsDataset import JointsDataset
 
 class BboxDataset(JointsDataset):
     def __init__(self, mode, numJoints):
-        super().__init__(mode, numJoints)
+        JointsDataset.__init__(self, mode, numJoints)
 
     def _get_db(self):
         pass
