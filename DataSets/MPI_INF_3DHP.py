@@ -27,6 +27,7 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
                 cfg.Hesse["numJoints"],
                 cfg.Hesse["pelvicIndex"],
                 cfg.Hesse["connectedJoints"],
+                cfg.Hesse["jointColours"]
             )
         self.basePath = cfg.MPI_INF["basePath"]
         self.subjects = cfg.MPI_INF["modeSubjects"][mode]
@@ -156,12 +157,7 @@ if __name__ == "__main__":
     # print(len(data))
     # data.loadImages()
 
-    inputData, outputData, meta = data[0]
-    plt.figure()
-    ax1 = plt.subplot(1, 2, 1)
-    ax2 = plt.subplot(1, 2, 2, projection="3d")
-    vis.plot3DJoints(ax1, ax2, outputData, meta["imagePath"], data.connectedJoints)
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
-    plt.savefig(os.path.join(__location__, "../images/MPI_INF_3DHP.png"))
+    data.visualiseSample(data[45268], os.path.join(__location__, "../images/MPI_INF_3DHP.png"))

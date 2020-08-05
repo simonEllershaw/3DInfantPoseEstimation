@@ -37,7 +37,7 @@ class JointsDataset(Dataset):
     def __getitem__(self, idx):
         pass
 
-    def visualiseSample(self, sample, ax):
+    def visualiseSample(self, sample):
         pass
 
     def getBboxCentreAndScaleFrom2DJointPos(jointPos2D, imageSize):
