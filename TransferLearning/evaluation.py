@@ -44,12 +44,12 @@ def evaluateDepthModel(model, dataloader, numJoints, head, neck, device):
         batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
             outputs, gt, head, neck
         )
-        test = batchEuclDist > 900
-        if test.any():
-            print(i)
-            print(batchEuclDist)
-            print(meta["imagePath"])
-            print()
+        # test = batchEuclDist > 900
+        # if test.any():
+        #     print(i)
+        #     print(batchEuclDist)
+        #     print(meta["imagePath"])
+        #     print()
         euclideanDist.append(batchEuclDist.numpy())
         runningJointsError += batchJointError
         runningPCKh += batchPCKh
@@ -73,67 +73,89 @@ def evaluateDepthModel(model, dataloader, numJoints, head, neck, device):
     print(f"{torch.mean(PCKh).item() * 100:.2f}%")
 
 
-def evaluateModel(model, dataloader, numJoints, head, neck):
+def evaluateModel(pose2DModel, liftingModel, dataloader, config):
 
     print("Evaluating model on test set")
     print("-" * 10)
     print(len(dataloader))
-    runningJointsError = torch.zeros(numJoints)
-    runningPCKh = torch.zeros(numJoints)
+
+    numJoints = config["numJoints"]
+    head = config["headIndex"]
+    neck = config["neckIndex"]
+
+    running2DJointsError = torch.zeros(numJoints)
+    running2DPCKh = torch.zeros(numJoints)
+    euclidean2DDist = []
+    running3DJointsError = torch.zeros(numJoints)
+    running3DPCKh = torch.zeros(numJoints)
+    euclidean3DDist = []
     i = 0
-    euclideanDist = []
-    for image, _, meta in dataloader:
+
+    for source, target, meta in dataloader:
         i += 1
         # if i == 5:
         #     break
-        outputs = model(image.to(device))
 
-        preds = outputs.detach().cpu().numpy()
-        predCoords = inference.postProcessPredictions(
-            preds, meta["centre"].numpy(), meta["scale"].numpy(), 64
-        )
-        gt = meta["joints2D"]
+        if pose2DModel:
+            outputs = pose2DModel(source.to(device))
+            preds = outputs.detach().cpu().numpy()
+            predCoords = inference.postProcessPredictions(
+                preds, meta["centre"].numpy(), meta["scale"].numpy(), 64
+            )
+            gt = meta["joints2D"]
 
-        predCoords = torch.tensor(predCoords)
-        # plt.figure()
-        # plt.scatter(gt[:, 0], gt[:, 1], color="red")
-        # plt.scatter(predCoords[:, 0], predCoords[:, 1], color="blue")
-        # plt.imshow(Image.open(meta["imagePath"][0]))
-        # __location__ = os.path.realpath(
-        #     os.path.join(os.getcwd(), os.path.dirname(__file__))
-        # )
-        # plt.savefig(os.path.join(__location__, "eval.png"))
-        # Zero joints that aren't visible
-        expandedVisJoints = meta["visJoints"].unsqueeze(-1).expand_as(gt)
-        gt = gt * expandedVisJoints
-        predCoords = predCoords * expandedVisJoints
+            predCoords = torch.tensor(predCoords)
+            expandedVisJoints = meta["visJoints"].unsqueeze(-1).expand_as(gt)
+            gt = gt * expandedVisJoints
+            predCoords = predCoords * expandedVisJoints
 
-        batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
-            predCoords, gt, head, neck
-        )
-        # test = batchEuclDist > 900
-        # if test.any():
-        #     print(i)
-        #     print(batchEuclDist)
-        #     print(meta["imagePath"])
-        #     print()
-        euclideanDist.append(batchEuclDist.numpy())
-        runningJointsError += batchJointError
-        runningPCKh += batchPCKh
+            batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
+                predCoords, gt, head, neck
+            )
+            euclidean2DDist.append(batchEuclDist.numpy())
+            running2DJointsError += batchJointError
+            running2DPCKh += batchPCKh
+            source = predCoords.view(-1, numJoints * 2)
+
+        if liftingModel:
+            outputs = (
+                liftingModel(source.to(device)).detach().cpu().view(-1, numJoints, 3)
+            )
+            gt = target.view(-1, numJoints, 3)
+
+            batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
+                outputs, gt, head, neck
+            )
+            euclidean3DDist.append(batchEuclDist.numpy())
+            running3DJointsError += batchJointError
+            running3DPCKh += batchPCKh
 
     # plotHistogram(np.array(euclideanDist))
-    jointError = runningJointsError / len(dataloader)
-    PCKh = runningPCKh / len(dataloader)
+    joint2DError = running2DJointsError / len(dataloader)
+    PCKh2D = running2DPCKh / len(dataloader)
+    joint3DError = running3DJointsError / len(dataloader)
+    PCKh3D = running3DPCKh / len(dataloader)
 
-    print("Joint Errors:")
-    print(jointError)
-    print("Mean Joint Error")
-    print(f"{torch.mean(jointError).item():.2f} pixels")
+    if pose2DModel:
+        print("2D Joint Errors:")
+        print(joint2DError)
+        print("Mean 2D Joint Error")
+        print(f"{torch.mean(joint2DError).item():.2f} pixels")
+        print("2D PCKh per joint:")
+        print(PCKh2D)
+        print("Mean 2D PCKh Error")
+        print(f"{torch.mean(PCKh2D).item() * 100:.2f} %")
+        print()
 
-    print("PCKH per joint:")
-    print(PCKh)
-    print("Mean PCKh")
-    print(f"{torch.mean(PCKh).item() * 100:.2f}%")
+    if liftingModel:
+        print("3D Joint Errors:")
+        print(joint3DError)
+        print("Mean 3D Joint Error")
+        print(f"{torch.mean(joint3DError).item():.2f} mm")
+        print("3D PCKh per joint:")
+        print(PCKh3D)
+        print("Mean 3D PCKh")
+        print(f"{torch.mean(PCKh3D).item() * 100:.2f} %")
 
 
 def plotHistogram(euclideanDist):
@@ -143,7 +165,7 @@ def plotHistogram(euclideanDist):
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
-    plt.savefig(os.path.join(__location__, f"../images/hist.png"))
+    plt.savefig(os.path.join(__location__, "../images/hist.png"))
 
 
 def calcEvalMetrics(preds, gt, head, neck):
@@ -244,28 +266,57 @@ def calcPCKh(euclideanDist, labels, head, neck, factor=0.5):
 #     plt.savefig(os.path.join(__location__, "../images/PredictPose.png"))
 
 
-def vis3DModelOutput(idx, connectedJoints, model, device, dataloader, batchSize):
-    for joints2D, gt, meta in dataloader:
+def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
+    numJoints = config["numJoints"]
+    connectedJoints = config["connectedJoints"]
+    jointColours = config["jointColours"]
+
+    for source, target, meta in dataloader:
         if idx < batchSize:
             break
         else:
             idx -= batchSize
-    outputs = model(joints2D.to(device))
 
     plt.figure()
-    ax = plt.subplot(1, 3, 1)
+    numColumns = 2 if liftingModel else 1
+
+    # Plot 2D Gt
+    ax = plt.subplot(numColumns, 2, 1)
+    ax.set_title("Ground Truth 2D")
     image = Image.open(meta["imagePath"][idx])
-    print(meta["imagePath"])
-    ax.imshow(image)
-    ax = plt.subplot(1, 3, 2, projection="3d")
-    vis.plot3DJoints(ax, gt[idx], connectedJoints, "gt")
-    ax = plt.subplot(1, 3, 3, projection="3d")
-    vis.plot3DJoints(ax, outputs[idx], connectedJoints, "output")
+    vis.plotImage(ax, image)
+    vis.plot2DJoints(ax, meta["joints2D"][idx], connectedJoints, jointColours)
+
+    if pose2DModel:
+        ax = plt.subplot(numColumns, 2, 2)
+        ax.set_title("Output 2D")
+        vis.plotImage(ax, image)
+        outputs = pose2DModel(source.to(device))
+        preds = outputs.detach().cpu().numpy()
+        predCoords = inference.postProcessPredictions(
+            preds, meta["centre"].numpy(), meta["scale"].numpy(), 64
+        )
+        vis.plot2DJoints(ax, predCoords[idx], connectedJoints, jointColours)
+        source = torch.tensor(predCoords).view(-1, numJoints * 2)
+
+    if liftingModel:
+        ax = plt.subplot(numColumns, 2, 3, projection="3d")
+        ax.set_title("Ground Truth 3D")
+        vis.plot3DJoints(
+            ax, target[idx], connectedJoints, jointColours
+        )
+
+        ax = plt.subplot(numColumns, 2, 4, projection="3d")
+        ax.set_title("Output 3D")
+        outputs = liftingModel(source.to(device)).detach().cpu().view(-1, numJoints, 3)
+        vis.plot3DJoints(
+            ax, outputs[idx], connectedJoints, jointColours
+        )
 
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
-    plt.savefig(os.path.join(__location__, "../images/MPI_INF3DOutput.png"))
+    plt.savefig(os.path.join(__location__, "../images/Output.png"))
 
 
 def plotValidationError(fname):
@@ -279,31 +330,39 @@ def plotValidationError(fname):
 
 
 if __name__ == "__main__":
-    dataConfig = cfg.Hesse
-    head = dataConfig["headIndex"]
-    neck = dataConfig["neckIndex"]
-    numJoints = dataConfig["numJoints"]
-    connectedJoints = dataConfig["connectedJoints"]
     batchSize = 16
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
 
-    dataLoader, model, _ = model.getHesse2DPoseTrainingObjects(batchSize, device)
-    # model = model.loadHesseDepthModel(numJoints, device)
-    checkpoint = torch.load(
-        "/homes/sje116/Diss/TransferLearning/savedModels/03_08_16_28/model.tar"
+    # dataLoader, model, _ = model.getHesseLiftingTrainingObjects(batchSize, device)
+
+    dataLoaders, pose2DModel, liftingModel = model.getEndToEndHesseModel(
+        batchSize, device
     )
-    model.load_state_dict(checkpoint["model_state_dict"])
-    model.eval()
-    # vis3DModelOutput(16443, connectedJoints, model, device, dataLoader["val"], batchSize)
-    evaluateModel(model, dataLoader["test"], numJoints, head, neck)
-    # evaluateDepthModel(model, dataLoader["val"], numJoints, head, neck, device)
+
+    hessePose2DFname = (
+        "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_19/model.tar"
+    )
+    hesseLifitingFname = (
+        "/homes/sje116/Diss/TransferLearning/savedModels/05_08_11_34/model.tar"
+    )
+
+    checkpoint = torch.load(hessePose2DFname)
+    pose2DModel.load_state_dict(checkpoint["model_state_dict"])
+    pose2DModel.eval()
+
+    checkpoint = torch.load(hesseLifitingFname)
+    liftingModel.load_state_dict(checkpoint["model_state_dict"])
+    liftingModel.eval()
+
+    # evaluateModel(pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse)
+
+    visAnOutput(0, pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse, batchSize)
+
     # plotValidationError(
-    #     "/homes/sje116/Diss/TransferLearning/savedModels/03_08_15_56/metrics.txt"
+    #     "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_58/model.tar"
     # )
-
-
 
     # torch.set_printoptions(precision=5)
 
