@@ -45,11 +45,18 @@ class MPIIDataset(Joints2DDataset):
                 for anno in annos:
                     imagePath = os.path.join(self.imageDirectory, anno["image"])
                     joints2D = np.array(anno["joints"])
-                    centre = np.array(anno["center"])
-                    scale = anno["scale"]
+                    # Some annotations corrupted to all fill values
+                    # so do not add to db
+                    if np.all(joints2D == -1):
+                        continue
+                    PCKhThreshold = np.sqrt(
+                        np.sum(np.square(joints2D[9] - joints2D[8]))
+                    )
+                    centre = None  # np.array(anno["center"])
+                    scale = None  # anno["scale"]
                     db.append(
                         Joints2DDataset.generateSample(
-                            joints2D, imagePath, scale, centre
+                            joints2D, imagePath, scale, centre, PCKhThreshold
                         )
                     )
         return db
@@ -76,13 +83,9 @@ class MPIIDataset(Joints2DDataset):
 
 if __name__ == "__main__":
     data2D = MPIIDataset("train")
-    sample = data2D[1457]
-    print(sample[1])
-    plt.figure()
-    ax = plt.subplot(1, 1, 1)
-    data2D.visualiseSample(sample, ax)
-
+    sample = data2D[0]
     __location__ = os.path.realpath(
         os.path.join(os.getcwd(), os.path.dirname(__file__))
     )
-    plt.savefig(os.path.join(__location__, "../images/MPII.png"))
+    fname = os.path.join(__location__, "../images/MPII.png")
+    data2D.visualiseSample(sample, fname)
