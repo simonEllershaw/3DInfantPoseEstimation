@@ -40,7 +40,8 @@ class Joints3DDataset(JointsDataset):
 
         meta = {
             "imagePath": anno["imagePath"],
-            "3DPCKhThreshold": anno["3DPCKhThreshold"]
+            "3DPCKhThreshold": anno["3DPCKhThreshold"],
+            "joints2D": anno["joints2D"],
         }
         source = torch.tensor(anno["joints2D"], dtype=torch.float32)
         target = torch.tensor(anno["joints3D"], dtype=torch.float32)
