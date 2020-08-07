@@ -59,24 +59,32 @@ def plotHeatmap(ax, heatmaps):
     upsampledJoints = heatmaps.repeat(4, axis=1).repeat(4, axis=2)
     for joint in upsampledJoints:
         ax.contourf(joint, levels)
+    # ax.contourf(upsampledJoints[8], levels)
+    # ax.contourf(upsampledJoints[9], levels)
+    
     
 def plotImage(ax, image):
     if torch.is_tensor(image):
         image = image.permute(1, 2, 0).cpu().numpy()
     ax.imshow(image)
 
-def plot2DJoints(ax, joints2D, connectedJoints, jointColours):
+def plot2DJoints(ax, joints2D, connectedJoints, jointColours, visJoints):
     for i in np.arange(len(connectedJoints)):
-        x, y = [
-            np.array(
-                [
-                    joints2D[connectedJoints[i, 0], j],
-                    joints2D[connectedJoints[i, 1], j],
-                ]
-            )
-            for j in range(2)
-        ]
-        ax.plot(x, y, lw=2, c=jointColours[i])
+        joint1 = connectedJoints[i, 0]
+        joint2 = connectedJoints[i, 1]
+        if visJoints[joint1] == 1 and visJoints[joint2] == 1:
+            x, y = [
+                np.array(
+                    [
+                        joints2D[connectedJoints[i, 0], j],
+                        joints2D[connectedJoints[i, 1], j],
+                    ]
+                )
+                for j in range(2)
+            ]
+            ax.plot(x, y, lw=2, c=jointColours[i])
 
-    ax.scatter(
-        joints2D[:, 0], joints2D[:, 1], c="black")
+    for i in range(len(joints2D)):
+        scatterColour = "black" if visJoints[i] == 1 else "orange"
+        ax.scatter(
+            joints2D[i, 0], joints2D[i, 1], c=scatterColour)
