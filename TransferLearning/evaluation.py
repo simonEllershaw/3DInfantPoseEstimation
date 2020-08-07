@@ -29,14 +29,13 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
     # print(len(dataloader))
 
     numJoints = config["numJoints"]
-    head = config["headIndex"]
-    neck = config["neckIndex"]
 
     running2DJointsError = torch.zeros(numJoints)
     running2DPCKh = torch.zeros(numJoints)
     euclidean2DDist = []
     running3DJointsError = torch.zeros(numJoints)
     running3DPCKh = torch.zeros(numJoints)
+    jointFrequency = torch.zeros(numJoints)
     euclidean3DDist = []
     i = 0
 
@@ -44,6 +43,8 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
         i += 1
         # if i == 5:
         #     break
+
+        jointFrequency += torch.sum(meta["visJoints"], 0)
 
         if pose2DModel:
             outputs = pose2DModel(source.to(device))
@@ -55,6 +56,7 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
 
             predCoords = torch.tensor(predCoords)
             expandedVisJoints = meta["visJoints"].unsqueeze(-1).expand_as(gt)
+
             gt = gt * expandedVisJoints
             predCoords = predCoords * expandedVisJoints
 
@@ -80,20 +82,22 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
             running3DPCKh += batchPCKh
 
     # plotHistogram(np.array(euclideanDist))
-    joint2DError = running2DJointsError / len(dataloader)
-    PCKh2D = running2DPCKh / len(dataloader)
-    joint3DError = running3DJointsError / len(dataloader)
-    PCKh3D = running3DPCKh / len(dataloader)
+    joint2DError = running2DJointsError / jointFrequency
+    PCKh2D = running2DPCKh / jointFrequency * 100
+    joint3DError = running3DJointsError / jointFrequency
+    PCKh3D = running3DPCKh / jointFrequency * 100
 
     table = PrettyTable()
     table.add_column("Joint", config["jointNames"])
     if pose2DModel:
         table.add_column("2D Joint Error", joint2DError.numpy())
         table.add_column("2D PCKh", PCKh2D.numpy())
+        table.sortby = "2D PCKh"
     if liftingModel:
         table.add_column("3D Joint Error", joint3DError.numpy())
         table.add_column("3D PCKh", PCKh3D.numpy())
-
+        table.sortby = "3D PCKh"
+    table.reversesort = True
     print(table)
     print()
 
@@ -101,14 +105,14 @@ def evaluateModel(pose2DModel, liftingModel, dataloader, config, PCKhFactor):
         print("Mean 2D Joint Error")
         print(f"{torch.mean(joint2DError).item():.2f} pixels")
         print("Mean 2D PCKh Error")
-        print(f"{torch.mean(PCKh2D).item() * 100:.2f} %")
+        print(f"{torch.mean(PCKh2D).item():.2f} %")
         print()
 
     if liftingModel:
         print("Mean 3D Joint Error")
         print(f"{torch.mean(joint3DError).item():.2f} mm")
         print("Mean 3D PCKh")
-        print(f"{torch.mean(PCKh3D).item() * 100:.2f} %")
+        print(f"{torch.mean(PCKh3D).item():.2f} %")
 
 
 def plotHistogram(euclideanDist):
@@ -127,7 +131,7 @@ def calcEvalMetrics(preds, gt, PCKhThresholds, PCKhfactor):
     # PCKh
     batchPCKh = calcPCKh(euclideanDist, gt, PCKhThresholds, PCKhfactor)
     # Sum over batch
-    batchJointError = torch.mean(euclideanDist, 0)
+    batchJointError = torch.sum(euclideanDist, 0)
     return batchJointError, batchPCKh, euclideanDist
 
 
@@ -151,11 +155,12 @@ def calcPCKh(euclideanDist, labels, thresholds, factor):
     zeros = torch.zeros(maskedDistances.size())
     # Per frame per joint
     PCKhValues = torch.where(maskedDistances <= thresholds, ones, zeros)
+    PCKhValues = torch.where(maskedDistances == 0, zeros, PCKhValues)
     # PCKhValues = torch.prod(PCKhValues, 1)
-    return torch.mean(PCKhValues, 0)
+    return torch.sum(PCKhValues, 0)
 
 
-def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
+def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize, fname):
     numJoints = config["numJoints"]
     connectedJoints = config["connectedJoints"]
     jointColours = config["jointColours"]
@@ -174,7 +179,7 @@ def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
     ax.set_title("Ground Truth 2D")
     image = Image.open(meta["imagePath"][idx])
     vis.plotImage(ax, image)
-    vis.plot2DJoints(ax, meta["joints2D"][idx], connectedJoints, jointColours)
+    vis.plot2DJoints(ax, meta["joints2D"][idx], connectedJoints, jointColours, meta["visJoints"][idx])
 
     if pose2DModel:
         ax = plt.subplot(numColumns, 2, 2)
@@ -185,8 +190,14 @@ def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
         predCoords = inference.postProcessPredictions(
             preds, meta["centre"].numpy(), meta["scale"].numpy(), 64
         )
-        vis.plot2DJoints(ax, predCoords[idx], connectedJoints, jointColours)
+        vis.plot2DJoints(ax, predCoords[idx], connectedJoints, jointColours, meta["visJoints"][idx])
         source = torch.tensor(predCoords).view(-1, numJoints * 2)
+
+        batchJointError, batchPCKh, batchEuclDist = calcEvalMetrics(
+            torch.tensor(predCoords), meta["joints2D"][idx], meta["2DPCKhThreshold"], 0.5
+        )
+        print(batchPCKh)
+        print(meta["visJoints"][idx])
 
     if liftingModel:
         ax = plt.subplot(numColumns, 2, 3, projection="3d")
@@ -198,10 +209,8 @@ def visAnOutput(idx, pose2DModel, liftingModel, dataloader, config, batchSize):
         outputs = liftingModel(source.to(device)).detach().cpu().view(-1, numJoints, 3)
         vis.plot3DJoints(ax, outputs[idx], connectedJoints, jointColours)
 
-    __location__ = os.path.realpath(
-        os.path.join(os.getcwd(), os.path.dirname(__file__))
-    )
-    plt.savefig(os.path.join(__location__, "../images/Output.png"))
+    plt.savefig(fname)
+    plt.close()
 
 
 def plotValidationError(fname):
@@ -215,37 +224,51 @@ def plotValidationError(fname):
 
 
 if __name__ == "__main__":
-    batchSize = 16
+    batchSize = 64
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
 
-    # dataLoader, liftingModel, _ = model.getHesseLiftingTrainingObjects(
+    dataLoader, pose2DModel, _ = model.getMPIITrainingObjects(batchSize, device)
+
+    dataLoader, liftingModel, _ = model.getMPI_INFLiftingTrainingObjects(batchSize, device)
+
+    # dataLoader, pose2DModel, liftingModel = model.getEndToEndHesseModel(
     #     batchSize, device
     # )
-
-    dataLoader, pose2DModel, liftingModel = model.getEndToEndHesseModel(
-        batchSize, device
-    )
 
     hessePose2DFname = (
         "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_19/model.tar"
     )
-    hesseLifitingFname = (
+    hesseLiftingFname = (
         "/homes/sje116/Diss/TransferLearning/savedModels/05_08_11_34/model.tar"
     )
+    MPI_INFLiftingFname = (
+        "/homes/sje116/Diss/TransferLearning/savedModels/04_08_18_35/model.tar"
+    )
+    MPIIPose2DFname = (
+        "/homes/sje116/Diss/TransferLearning/savedModels/03_08_19_30/model.tar"
+    )
 
-    checkpoint = torch.load(hessePose2DFname)
+    checkpoint = torch.load(MPIIPose2DFname)
     pose2DModel.load_state_dict(checkpoint["model_state_dict"])
     pose2DModel.eval()
 
-    checkpoint = torch.load(hesseLifitingFname)
-    liftingModel.load_state_dict(checkpoint["model_state_dict"])
-    liftingModel.eval()
+    # checkpoint = torch.load(hesseLiftingFname)
+    # liftingModel.load_state_dict(checkpoint["model_state_dict"])
+    # liftingModel.eval()
 
-    evaluateModel(pose2DModel, liftingModel, dataLoader["test"], cfg.Hesse, 1)
+    # evaluateModel(pose2DModel, None, dataLoader["val"], cfg.MPII, 0.5)
 
-    # visAnOutput(0, pose2DModel, liftingModel, dataLoaders["test"], cfg.Hesse, batchSize)
+    for i in range(len(dataLoader["val"])):
+        __location__ = os.path.realpath(
+            os.path.join(os.getcwd(), os.path.dirname(__file__))
+        )
+        fname = os.path.join(__location__, f"../images/MPIIOutput/{i}.png")
+        print(i)
+        visAnOutput(
+            i*batchSize, pose2DModel, None, dataLoader["val"], cfg.MPII, batchSize, fname
+        )
 
     # plotValidationError(
     #     "/homes/sje116/Diss/TransferLearning/savedModels/04_08_12_58/model.tar"

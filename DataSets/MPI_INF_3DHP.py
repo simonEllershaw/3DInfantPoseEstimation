@@ -37,23 +37,24 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
         self.annotionsFname = cfg.MPI_INF["annotionsFname"]
         self.hesseMappings = cfg.MPI_INF["hesseMappings"]
         self.jointsNotInHesse = cfg.MPI_INF["jointsNotInHesse"]
+        self.PCKhThreshold = cfg.MPI_INF["PCKhThreshold"]
 
         if generateAnnotationsJSON:
             self.generateAnnotationsJSON()
         self.db = self._get_db()
 
-    def getRGBImagePath(self, seqDirectory, camera, frameNumber):
-        return os.path.join(
-            seqDirectory, "imageSequence", f"{camera:02}", f"frame{frameNumber:05}.jpg"
-        )
+    # def getRGBImagePath(self, seqDirectory, camera, frameNumber):
+    #     return os.path.join(
+    #         seqDirectory, "imageSequence", f"{camera:02}", f"frame{frameNumber:05}.jpg"
+    #     )
 
     def getSequenceDirectory(self, subject, sequence):
         return os.path.join(self.basePath, subject, sequence)
 
-    def getMaskImagePath(self, seqDirectory, camera, frameNumber):
-        return os.path.join(
-            seqDirectory, "FGmasks", f"{camera:02}", f"frame{frameNumber:05}.jpg"
-        )
+    # def getMaskImagePath(self, seqDirectory, camera, frameNumber):
+    #     return os.path.join(
+    #         seqDirectory, "FGmasks", f"{camera:02}", f"frame{frameNumber:05}.jpg"
+    #     )
 
     @abstractmethod
     def _get_db(self):
@@ -84,7 +85,7 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
                         joint3D = self.arrayToHesseFormat(joint3D)
 
                         db.append(
-                            Joints3DDataset.generateSample(joint2D, joint3D, imagePath)
+                            Joints3DDataset.generateSample(joint2D, joint3D, imagePath, self.PCKhThreshold)
                         )
         return db
 
