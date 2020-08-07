@@ -40,36 +40,42 @@ class JointsDataset(Dataset):
     def visualiseSample(self, sample):
         pass
 
-    def getBboxCentreAndScaleFrom2DJointPos(jointPos2D, imageSize):
+    def getBboxCentreAndScaleFrom2DJointPos(self, jointPos2D, imageSize):
         # Bounding box corners given by padding from max and min 2D joint
         # coordinates in each axis
         padding = 100
-        # Switch image size x and y 
+        # Switch image size x and y
         imageSize = np.array(imageSize)
         imageSize[0], imageSize[1] = imageSize[1], imageSize[0]
 
-        x1 = np.min(jointPos2D[:, 0]) - padding
-        y1 = np.min(jointPos2D[:, 1]) - padding
-        x2 = np.max(jointPos2D[:, 0]) + padding
-        y2 = np.max(jointPos2D[:, 1]) + padding
+        jointsNoFillValues = jointPos2D[(jointPos2D[:, 0] != -1) & (jointPos2D[:, 1] != -1)]
+        x1 = np.min(jointsNoFillValues[:, 0]) - padding
+        y1 = np.min(jointsNoFillValues[:, 1]) - padding
+        x2 = np.max(jointsNoFillValues[:, 0]) + padding
+        y2 = np.max(jointsNoFillValues[:, 1]) + padding
 
         # CHECK
         # Bbox is contrained to image dimensions
         bbox = np.array([x1, y1, x2, y2])
         bbox = np.clip(bbox, 0, np.concatenate((imageSize, imageSize)))
 
-        centre = (bbox[2:] + bbox[:2]) / 2
+        # centre = (bbox[2:] + bbox[:2]) / 2
         bboxDimensions = bbox[2:] - bbox[:2]
         scale = max(bboxDimensions) / 200  # scale in relation to 200px
+        centre = (bbox[2:] + bbox[:2]) / 2
+
         return centre, scale
 
     def preProcessImage(self, image, center, scale):
         # Get rotation angle (random if training 0 otherwise)
         orgImageWidth = -1
         if self.mode == "train":
-            image, center, rotation, orgImageWidth = JointsDataset.randomRotationAndFlip(
-                image, center, orgImageWidth
-            )
+            (
+                image,
+                center,
+                rotation,
+                orgImageWidth,
+            ) = JointsDataset.randomRotationAndFlip(image, center, orgImageWidth)
         else:
             rotation = 0
 

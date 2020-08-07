@@ -45,7 +45,7 @@ class Joints2DDataset(JointsDataset):
         orgImageShape = np.shape(image)
 
         if anno["centre"] is None or anno["scale"] is None:
-            anno["centre"], anno["scale"] = JointsDataset.getBboxCentreAndScaleFrom2DJointPos(
+            anno["centre"], anno["scale"] = self.getBboxCentreAndScaleFrom2DJointPos(
                 anno["joints2D"], orgImageShape[:-1]
             )
 
