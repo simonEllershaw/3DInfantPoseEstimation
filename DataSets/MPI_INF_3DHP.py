@@ -43,18 +43,8 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
             self.generateAnnotationsJSON()
         self.db = self._get_db()
 
-    # def getRGBImagePath(self, seqDirectory, camera, frameNumber):
-    #     return os.path.join(
-    #         seqDirectory, "imageSequence", f"{camera:02}", f"frame{frameNumber:05}.jpg"
-    #     )
-
     def getSequenceDirectory(self, subject, sequence):
         return os.path.join(self.basePath, subject, sequence)
-
-    # def getMaskImagePath(self, seqDirectory, camera, frameNumber):
-    #     return os.path.join(
-    #         seqDirectory, "FGmasks", f"{camera:02}", f"frame{frameNumber:05}.jpg"
-    #     )
 
     @abstractmethod
     def _get_db(self):
@@ -68,10 +58,6 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
                 annoMatFile = sio.loadmat(os.path.join(seqDirectory, "annot.mat"))
                 for frameNumber in range(numOfFrames):
                     for camera in self.cameras:
-                        imagePath = self.getRGBImagePath(
-                            seqDirectory, camera, frameNumber
-                        )
-
                         joint2D = annoMatFile["annot2"][camera][0][
                             frameNumber
                         ].reshape(-1, 2)
@@ -85,7 +71,7 @@ class MPI_INF_3DHPDataset(Joints3DDataset):
                         joint3D = self.arrayToHesseFormat(joint3D)
 
                         db.append(
-                            Joints3DDataset.generateSample(joint2D, joint3D, imagePath, self.PCKhThreshold)
+                            Joints3DDataset.generateSample(joint2D, joint3D, "None", self.PCKhThreshold)
                         )
         return db
 
