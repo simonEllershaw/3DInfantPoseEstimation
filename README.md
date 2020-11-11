@@ -1,6 +1,8 @@
 # 3D Infant Pose Estimation from RGB Video using Deep Learning
 
-This [codebase](https://github.com/simonEllershaw/3DInfantPoseEstimation/edit/master/README.md) was produced during my MSc Individual Project. It contains a Pytorch implementation of the 3D infant pose estimation model that was developed over the course of the project. This was shown to achieve state-of-the-art-results on the MINI-RGBD benchmark dataset; AJPE 28.47mm, PCKh 1.0 65.20%, PCKh 2.0 88.99%. The report also contained within this repo outlines the methology and finding in detail. A video of the output of the model on the test set of the MINI-RGBD dataset is also available [here](https://www.youtube.com/watch?v=rvivVQzxUIc)
+This codebase was produced during my MSc Individual Project an abstract from which was accepted into the 'Medical Imaging meets NeurIps' satellite worshop 2020. It contains a Pytorch implementation of the 3D infant pose estimation model that was developed over the course of the project. This was shown to achieve state-of-the-art-results on the MINI-RGBD benchmark dataset; AJPE 28.47mm, PCKh 1.0 65.20%, PCKh 2.0 88.99%. 
+
+The report also contained within this repo outlines the methodology and findings in detail which is summarised in this [presentation](https://www.youtube.com/watch?v=edN4z7h-9Gc&feature=youtu.be&ab_channel=BernhardKainz). A [video](https://www.youtube.com/watch?v=rvivVQzxUIc) of the output of the model on the test set of the syntheitc infant MINI-RGBD dataset is also available.
 
 ![Example Output](Images/ExampleOutput.png)
 
@@ -11,7 +13,7 @@ The codebase presented here was designed as a rough and ready iterative playgrou
 However, if one wishes to download the relevant sources the following needs to be done:
 
 1. Download this repo
-1. Download the SavedModels.zip from [OneDrive](https://imperiallondon-my.sharepoint.com/:u:/g/personal/sje116_ic_ac_uk/EflqDbI3plVKhFf2FFG4i-UBuIdF82krOQfTzMK_Wje3CQ?e=ARWabg). Unzip and place under the project root
+1. Download the SavedModels.zip from [OneDrive](https://liveuclac-my.sharepoint.com/:u:/g/personal/rmhisje_ucl_ac_uk/EcQr9vyPlSBPmdJSazAIDP0BJ7ydxgrjSmYpeoho1v5efQ?e=4MTIH7). Unzip and place under the project root
 1. Download the MPI_INF_3DHP, MPII and MINI-RGBD datasets and update the Datasets/Utils/Config.py with their locations. If you have access to Imperial's Bitbucket this step is not necessary and the config is setup correctly.
 
 ## Running
