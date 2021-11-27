@@ -1,8 +1,10 @@
 # 3D Infant Pose Estimation from RGB Video using Deep Learning
 
-This codebase was produced during my MSc Individual Project an abstract from which was accepted into the 'Medical Imaging meets NeurIps' satellite worshop 2020. It contains a Pytorch implementation of the 3D infant pose estimation model that was developed over the course of the project. This was shown to achieve state-of-the-art-results on the MINI-RGBD benchmark dataset; AJPE 28.47mm, PCKh 1.0 65.20%, PCKh 2.0 88.99%. 
+This codebase was produced during my MSc Individual Project an [abstract](http://www.cse.cuhk.edu.hk/~qdou/public/medneurips2020/6_3D_Infant_Pose_Estimation_Using_Transfer_Learning_Camera_Ready.pdf) from which was accepted into the 'Medical Imaging meets NeurIps' satellite worshop 2020. It contains a Pytorch implementation of the 3D infant pose estimation model that was developed over the course of the project. This was shown to achieve state-of-the-art-results on the MINI-RGBD benchmark dataset; AJPE 28.47mm, PCKh 1.0 65.20%, PCKh 2.0 88.99%. 
 
 The report also contained within this repo outlines the methodology and findings in detail which is summarised in this [presentation](https://www.youtube.com/watch?v=edN4z7h-9Gc&feature=youtu.be&ab_channel=BernhardKainz). A [video](https://www.youtube.com/watch?v=rvivVQzxUIc) of the output of the model on the test set of the syntheitc infant MINI-RGBD dataset is also available.
+
+The models in this repo were also used in 3D experiments presented in the (CVPR paper)[https://infantmotion.github.io/] 'Unsupervised Human Pose Estimation through Transforming Shape Templates' 
 
 ![Example Output](Images/ExampleOutput.png)
 
