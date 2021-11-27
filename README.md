@@ -4,7 +4,7 @@ This codebase was produced during my MSc Individual Project an [abstract](http:/
 
 The report also contained within this repo outlines the methodology and findings in detail which is summarised in this [presentation](https://www.youtube.com/watch?v=edN4z7h-9Gc&feature=youtu.be&ab_channel=BernhardKainz). A [video](https://www.youtube.com/watch?v=rvivVQzxUIc) of the output of the model on the test set of the syntheitc infant MINI-RGBD dataset is also available.
 
-The models in this repo were also used in 3D experiments presented in the (CVPR paper)[https://infantmotion.github.io/] 'Unsupervised Human Pose Estimation through Transforming Shape Templates' 
+The models in this repo were also used in 3D experiments presented in the [CVPR paper](https://infantmotion.github.io/) 'Unsupervised Human Pose Estimation through Transforming Shape Templates' 
 
 ![Example Output](Images/ExampleOutput.png)
 
